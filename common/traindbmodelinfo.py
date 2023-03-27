@@ -17,14 +17,9 @@ import tdbconstants
 class TDBModelInfo():
     """A manager for docker information for PyTorchJob client"""
 
-    def __init__(self, 
-                 registry, 
-                 name_prefix, 
-                 tag, 
-                 modeltype):
-        self.registry = registry
+    def __init__(self, registry, name_prefix, tag, modeltype):
+        self.registry, self.tag = registry, tag
         self.image_name = name_prefix + modeltype
-        self.tag = tag
 
     def full_image_name(self, tag):
         """Return the full image name

@@ -1,4 +1,4 @@
-# Copyright 2022 The TrainDB-ML Authors.
+# Copyright 2023 The TrainDB-ML Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -48,39 +48,34 @@ class TrainDBMLInitializer():
         return pv_config
 
     def write_pv_yaml(self, filename, pv_config, name=TDB_NAME, system=SYSTEM_NAME, hostpath=HOST_PATH):
-        pv_config['metadata']['name'] = name + VOL_POSTFIX
-        pv_config['metadata']['labels']['system'] = system
-        pv_config['metadata']['labels']['name'] = name + VOL_POSTFIX
+        pv_config['metadata'].update({'name': name + VOL_POSTFIX, 'labels': {'system': system, 'name': name + VOL_POSTFIX}})
         pv_config['spec']['hostPath']['path'] = hostpath
 
         with open(filename, 'w') as f:
             yaml.dump(pv_config, f)
 
     def write_pvc_yaml(self, filename, pv_config, name=TDB_NAME, system=SYSTEM_NAME, hostpath=HOST_PATH):
-        pv_config['metadata']['name'] = name + CLAIM_POSTFIX
-        pv_config['metadata']['namespace'] = name
-        pv_config['spec']['selector']['matchLabels']['system'] = system
-        pv_config['spec']['selector']['matchLabels']['name'] = name + VOL_POSTFIX
+        pv_config['metadata'].update({'name': name + CLAIM_POSTFIX, 'namespace': name})
+        pv_config['spec']['selector']['matchLabels'].update({'system': system, 'name': name + VOL_POSTFIX})
 
         with open(filename, 'w') as f:
             yaml.dump(pv_config, f)
 
     ### Create YAML files
     def create_pv_yaml_from_template(self, conf_path, namespace, system=SYSTEM_NAME, hostpath=HOST_PATH):
-        pv_conf = self.open_yaml(conf_path+ PV_TEMPLATE)
-        yaml_filename = conf_path + namespace + PV_POSTFIX
-        self.write_pv_yaml(yaml_filename, pv_conf, namespace, system, hostpath)
+        pv_conf = self.open_yaml(conf_path + PV_TEMPLATE)
+        self.write_pv_yaml(conf_path + namespace + PV_POSTFIX, pv_conf, namespace, system, hostpath)
 
     def create_pvc_yaml_from_template(self, conf_path, namespace, system=TDB_NAME, hostpath=HOST_PATH):
-        pv_conf = self.open_yaml(conf_path+ PVC_TEMPLATE)
-        yaml_filename = conf_path + namespace + PVC_POSTFIX
+        pv_conf = self.open_yaml(os.path.join(conf_path, PVC_TEMPLATE))
+        yaml_filename = os.path.join(conf_path, namespace + PVC_POSTFIX)
         self.write_pvc_yaml(yaml_filename, pv_conf, namespace, system, hostpath)
 
     ### Deploy PV, PVC using YAML files
     def deploy_yaml(self, yaml_file, namespace=HOST_PATH):
         config.load_kube_config()
         k8s_client = client.ApiClient()
-        return utils.create_from_yaml(k8s_client,yaml_file,verbose=True)
+        return utils.create_from_yaml(k8s_client, yaml_file, verbose=True)
 
     def get_pv_filename(self, conf_path, namespace):
         return conf_path + namespace + PV_POSTFIX
@@ -126,12 +121,12 @@ class TrainDBMLInitializer():
         self.create_pvc_yaml_from_template(CONF_PATH, tdb_namespace, system=SYSTEM_NAME, hostpath=HOST_PATH)
 
         if self.deploy_yaml(self.get_pv_filename(CONF_PATH, namespace=tdb_namespace)):
-            print("Persistent volume is successfully created.")
+            print("Persistent volume is created.")
         else:
             raise Exception("The requested persistent volume already existed.")
 
         if self.deploy_yaml(self.get_pvc_filename(CONF_PATH, namespace=tdb_namespace)):
-            print("Persistent volume claim is successfully created.")
+            print("Persistent volume claim is created.")
         else:
             raise Exception("The requested persistent volume claim already existed.")
 
