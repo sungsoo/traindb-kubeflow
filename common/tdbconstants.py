@@ -27,3 +27,4 @@ TRAINDB_ML_LOG_DATEFMT = '%Y-%m-%d %H:%M:%S'
 DEFAULT_NAMESPACE = "default"
 TRAINDB_ML_NAMESPACE = "traindb-ml"
 TRAINDB_ML_TRAIN_PREFIX = "traindb-ml-train"
+TRAINDB_ML_SUCCESS = 1

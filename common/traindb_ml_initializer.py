@@ -22,6 +22,8 @@ from kubernetes import client, config, utils
 from kubernetes.client.rest import ApiException
 
 LOG = logging.getLogger(__name__)
+TRAINDB_ML_SUCCESS = 1
+TRAINDB_ML_FAILURE = 0
 
 ### Input parameters
 CONF_PATH = '/opt/traindb/traindb-ml/conf/' # This is client side directory (Kubernetes/Kubeflow Python Client)
@@ -38,24 +40,29 @@ CLAIM_POSTFIX = '-claim'
 PV_POSTFIX = '-pv.yaml'
 PVC_POSTFIX = '-pvc.yaml'
 
+
 class TrainDBMLInitializer():
     def __init__(self, tdbnamespace=None) -> None:
         self.namespace = tdbnamespace
 
     def open_yaml(self, filename):
-        with open(filename) as f:
-            pv_config = yaml.load(f, Loader=yaml.FullLoader)
-        return pv_config
+        with open(filename) as f:  # 파일을 열어서
+            pv_config = yaml.load(f, Loader=yaml.FullLoader)  # yaml 형식으로 불러온 후 pv_config 변수에 저장
+        return pv_config  # pv_config 변수 반환
 
     def write_pv_yaml(self, filename, pv_config, name=TDB_NAME, system=SYSTEM_NAME, hostpath=HOST_PATH):
+        # PV 설정에 이름과 라벨 추가
         pv_config['metadata'].update({'name': name + VOL_POSTFIX, 'labels': {'system': system, 'name': name + VOL_POSTFIX}})
+        # PV 설정에 호스트 경로 추가
         pv_config['spec']['hostPath']['path'] = hostpath
 
         with open(filename, 'w') as f:
             yaml.dump(pv_config, f)
 
     def write_pvc_yaml(self, filename, pv_config, name=TDB_NAME, system=SYSTEM_NAME, hostpath=HOST_PATH):
+        # PVC 설정에 이름과 네임스페이스 추가
         pv_config['metadata'].update({'name': name + CLAIM_POSTFIX, 'namespace': name})
+        # PVC 설정에 selector 추가
         pv_config['spec']['selector']['matchLabels'].update({'system': system, 'name': name + VOL_POSTFIX})
 
         with open(filename, 'w') as f:
@@ -63,46 +70,56 @@ class TrainDBMLInitializer():
 
     ### Create YAML files
     def create_pv_yaml_from_template(self, conf_path, namespace, system=SYSTEM_NAME, hostpath=HOST_PATH):
+        # PV 템플릿 파일 열기
         pv_conf = self.open_yaml(conf_path + PV_TEMPLATE)
+        # PV YAML 파일 생성
         self.write_pv_yaml(conf_path + namespace + PV_POSTFIX, pv_conf, namespace, system, hostpath)
 
     def create_pvc_yaml_from_template(self, conf_path, namespace, system=TDB_NAME, hostpath=HOST_PATH):
+        # PVC 템플릿 파일 열기
         pv_conf = self.open_yaml(os.path.join(conf_path, PVC_TEMPLATE))
+        # PVC YAML 파일 생성
         yaml_filename = os.path.join(conf_path, namespace + PVC_POSTFIX)
         self.write_pvc_yaml(yaml_filename, pv_conf, namespace, system, hostpath)
 
     ### Deploy PV, PVC using YAML files
     def deploy_yaml(self, yaml_file, namespace=HOST_PATH):
+        # Kubernetes API 설정
         config.load_kube_config()
         k8s_client = client.ApiClient()
+        # YAML 파일로부터 PV, PVC 생성
         return utils.create_from_yaml(k8s_client, yaml_file, verbose=True)
 
     def get_pv_filename(self, conf_path, namespace):
+        # PV YAML 파일 경로 반환
         return conf_path + namespace + PV_POSTFIX
     def get_pvc_filename(self, conf_path, namespace):
+        # PVC YAML 파일 경로 반환
         return conf_path + namespace + PVC_POSTFIX
 
     def create_namespace(self, namespace=None):
         config.load_kube_config()
-        if namespace:
-            v1 = client.CoreV1Api()
+        if not namespace:
+            print("namespace is not defined.")
+            return TRAINDB_ML_FAILURE
+        v1 = client.CoreV1Api()
+        try:
+            v1.read_namespace(name=namespace)
+        except ApiException:
+            body = client.V1Namespace(
+                kind="Namespace",
+                api_version="v1", 
+                metadata=client.V1ObjectMeta(name=namespace)
+            )
             try:
-                v1.read_namespace(name=namespace)
-            except ApiException:
-                body = client.V1Namespace(
-                    kind="Namespace",
-                    api_version="v1", 
-                    metadata=client.V1ObjectMeta(name=namespace)
-                )
-                try:
-                    v1.create_namespace(body=body)
-                except ApiException as e:
-                    LOG.error(
-                        "Exception when calling CoreV1Api->read_namespace: %s",
-                        e,
-                    )
+                v1.create_namespace(body=body)
+            except ApiException as e:
+                LOG.error("Exception when calling CoreV1Api->read_namespace: %s", e)
+                return e
+        return TRAINDB_ML_SUCCESS
 
     def delete_namespace(self, namespace=None):
+        # 네임스페이스 삭제
         config.load_kube_config()
         v1 = client.CoreV1Api()
         try:
@@ -117,9 +134,11 @@ class TrainDBMLInitializer():
 
 
     def init(self, tdb_namespace=NAMESPACE):
+        # PV, PVC YAML 파일 생성
         self.create_pv_yaml_from_template(CONF_PATH, tdb_namespace, system=SYSTEM_NAME, hostpath=HOST_PATH)
         self.create_pvc_yaml_from_template(CONF_PATH, tdb_namespace, system=SYSTEM_NAME, hostpath=HOST_PATH)
 
+        # PV, PVC 생성
         if self.deploy_yaml(self.get_pv_filename(CONF_PATH, namespace=tdb_namespace)):
             print("Persistent volume is created.")
         else:
