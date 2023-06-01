@@ -33,6 +33,8 @@ SYSTEM_NAME = 'traindb'
 TDB_NAME = 'traindb-ml'
 
 ### Constants for template yaml files
+# PV (Persistent Volume): Admin이 프로비저닝 하거나 StorageClass를 사용하여 Dynamic Provisioning한 Cluster Storage
+# PVC (Persistent Volume Claim): Pod의 Storage 요청
 PV_TEMPLATE = 'template-pv.yaml'
 PVC_TEMPLATE = 'template-pvc.yaml'
 VOL_POSTFIX = '-volume'
